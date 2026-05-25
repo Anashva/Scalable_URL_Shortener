@@ -20,6 +20,6 @@ const urlSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-urlSchema.index({ shortCode: 1 });
+// urlSchema.index({ shortCode: 1 });
 
 module.exports = mongoose.model("URL", urlSchema);
