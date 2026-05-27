@@ -6,10 +6,9 @@ const  validateUrl=require("../middlewares/validateUrl");
 
 
 router.post("/shorten",validateUrl,urlController.createShortUrl);
-
+router.get("/analytics/:shortCode",urlController.getAnalytics);
 router.get("/:shortCode",urlController.redirectUrl);
 
-router.get("/analytics/:shortCode",urlController.getAnalytics);
 
 
 

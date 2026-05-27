@@ -1,15 +1,80 @@
 const URL=require("../models/Url");
-const generateShortCode=require("../utils/generateShortCode");
 const {client}=require("../config/redis");
+const {nanoid}=require("nanoid");
 
+exports.createShortUrl = async (req, res) => {
 
-exports.createShortUrl=async(req,res)=>{
-    const {originalUrl}=req.body;
-    const shortCode=generateShortCode();
-    const newUrl=await URL.create({originalUrl, shortCode});
-    res.json({
-        shortUrl:`http://localhost:8080/${shortCode}`
-    });
+    try {
+
+        const {
+
+            originalUrl,
+
+            customAlias,
+
+            expiresInHours
+
+        } = req.body;
+
+        // CUSTOM ALIAS OR RANDOM CODE
+
+        const shortCode =
+            customAlias || nanoid(6);
+
+        // CHECK DUPLICATE
+
+        const existing =
+            await URL.findOne({ shortCode });
+
+        if (existing) {
+
+            return res.status(400).json({
+                message: "Alias already exists"
+            });
+        }
+
+        // EXPIRATION
+
+        let expiresAt = null;
+
+        if (expiresInHours) {
+
+            expiresAt = new Date(
+
+                Date.now() +
+
+                expiresInHours *
+                60 *
+                60 *
+                1000
+            );
+        }
+
+        // SAVE TO DB
+
+        const newUrl = await URL.create({
+
+            originalUrl,
+
+            shortCode,
+
+            expiresAt
+        });
+
+        res.status(201).json({
+
+            shortUrl:
+                `${process.env.BASE_URL}/${shortCode}`,
+
+            data: newUrl
+        });
+
+    } catch (error) {
+
+        res.status(500).json({
+            message: error.message
+        });
+    }
 };
 
 
@@ -19,30 +84,9 @@ exports.redirectUrl = async (req, res) => {
 
         const { shortCode } = req.params;
 
-        console.log("ShortCode:", shortCode);
-
-        // CHECK CACHE
-
-        const cachedUrl = await client.get(shortCode);
-
-        console.log("Cached URL:", cachedUrl);
-
-        // CACHE HIT
-
-        if (cachedUrl !== null) {
-
-            console.log("Redis Cache HIT");
-
-            return res.redirect(cachedUrl);
-        }
-
-        console.log("Redis Cache MISS");
-
-        // FIND FROM DB
+        // CHECK DATABASE FIRST
 
         const url = await URL.findOne({ shortCode });
-
-        console.log("MongoDB URL:", url);
 
         if (!url) {
 
@@ -51,23 +95,47 @@ exports.redirectUrl = async (req, res) => {
             });
         }
 
+        // CHECK EXPIRATION
+
+        if (
+            url.expiresAt &&
+            url.expiresAt < new Date()
+        ) {
+
+            return res.status(410).json({
+                message: "Link expired"
+            });
+        }
+
+        // CHECK REDIS CACHE
+
+        const cachedUrl =
+            await client.get(shortCode);
+
+        // CACHE HIT
+
+        if (cachedUrl !== null) {
+
+            console.log("Redis Cache HIT");
+
+            url.clicks++;
+
+            await url.save();
+
+            return res.redirect(cachedUrl);
+        }
+
+        console.log("Redis Cache MISS");
+
         // STORE IN REDIS
 
-        const response = await client.set(
+        await client.set(
             shortCode,
             url.originalUrl,
             {
                 EX: 3600
             }
         );
-
-        console.log("Redis SET Response:", response);
-
-        // VERIFY SAVED
-
-        const verify = await client.get(shortCode);
-
-        console.log("Redis Verify:", verify);
 
         // UPDATE CLICKS
 
@@ -86,7 +154,6 @@ exports.redirectUrl = async (req, res) => {
         });
     }
 };
-
 
 // analytics api
 
