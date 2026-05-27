@@ -4,6 +4,8 @@ require("dotenv").config();
 const { redirectUrl } = require("./controllers/urlController");
 const limiter = require("./middlewares/rateLimiter");
 const {connectRedis}=require("./config/redis");
+const cors=require("cors");
+
 
 
 
@@ -16,6 +18,7 @@ connectRedis();
  
 
 app.use(express.json());
+app.use(cors());
 app.use(limiter);
 
 
