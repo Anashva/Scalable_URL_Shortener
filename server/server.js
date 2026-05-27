@@ -2,13 +2,14 @@ const express=require('express');
 const app=express();
 const { redirectUrl } = require("./controllers/urlController");
 const limiter = require("./middlewares/rateLimiter");
-
+const {connectRedis}=require("./config/redis");
 
 
 
 require("dotenv").config();
 const connectDB=require("./config/db");
 connectDB();
+connectRedis();
 
 
  
